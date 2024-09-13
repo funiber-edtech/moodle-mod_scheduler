@@ -32,7 +32,7 @@ defined('MOODLE_INTERNAL') || die();
  */
 function scheduler_action_doaddsession($scheduler, $formdata, moodle_url $returnurl) {
 
-    global $DB, $output;
+    global $DB, $output, $USER;
 
     $data = (object) $formdata;
 
@@ -48,9 +48,11 @@ function scheduler_action_doaddsession($scheduler, $formdata, moodle_url $return
     $endat = $data->rangestart + ($data->endhour * 60 + $data->endminute) * 60;
     $slot = new stdClass();
     $slot->schedulerid = $scheduler->id;
-    $slot->teacherid = $data->teacherid;
-    $slot->appointmentlocation = $data->appointmentlocation;
-    $slot->exclusivity = $data->exclusivityenable ? $data->exclusivity : 0;
+    $slot->teacherid = $USER->id;
+    $slot->appointmentlocation = "";
+    $slot->exclusivity = 1;
+    $data->hideuntilrel = 0;
+    $data->emaildaterel = 86400;
     if ($data->divide) {
         $slot->duration = $data->duration;
     } else {
@@ -95,8 +97,8 @@ function scheduler_action_doaddsession($scheduler, $formdata, moodle_url $return
             }
             while ($slot->starttime <= $data->timeend - $slot->duration * 60) {
                 $conflicts = $scheduler->get_conflicts($data->timestart, $data->timestart + $slot->duration * 60,
-                                                       $data->teacherid, 0, SCHEDULER_ALL);
-                $resolvable = (boolean) $data->forcewhenoverlap;
+                                                       $USER->id, 0, SCHEDULER_ALL);
+                $resolvable = false;
                 foreach ($conflicts as $conflict) {
                     $resolvable = $resolvable
                                      && $conflict->isself == 1       // Do not delete slots outside the current scheduler.
@@ -216,7 +218,8 @@ function scheduler_action_delete_slots(array $slots, $action, moodle_url $return
     }
     $messagetype = ($cnt > 0) ? \core\output\notification::NOTIFY_SUCCESS : \core\output\notification::NOTIFY_INFO;
     \core\notification::add($message, $messagetype);
-    redirect($returnurl);
+    $url = new moodle_url($returnurl, array('istutor' => 1));  
+    redirect($url);
 }
 
 // Require valid session key for all actions.
@@ -285,6 +288,9 @@ switch ($action) {
                                         $teacher, $student, $teacher, $student, $COURSE);
             }
         }
+
+        $slot->appointmentlocation = '';
+        $slot->notes = "";
 
         $slot->save();
         redirect($viewurl);
